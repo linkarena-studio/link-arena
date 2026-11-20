@@ -110,13 +110,14 @@ function startGame(){if(!host||lobby.length<2)return;seq=1;const players=lobby.m
 function publicView(forSeat){const g=game;return {started:g.started,players:g.players.map((p,i)=>({name:p.name,count:p.hand.length,connected:p.connected,shield:p.shield})),hand:g.players[forSeat].hand.map(c=>({...c})),board:g.board.map(c=>({...c})),lastId:g.lastId,lastSide:g.lastSide,turn:g.turn,direction:g.direction,winner:g.winner,log:g.log,pending:g.pending?{actor:g.pending.actor,type:g.pending.type}:null}}
 function publish(){if(!game)return;const first=!view?.started;view=publicView(0);displayGame(first);for(const [i,c] of peers){if(c.open)c.send({type:"state",seat:i,view:publicView(i)})}}
 function announceEvent(evt){showEffect(evt);for(const c of peers.values())if(c.open)c.send({type:"effect",event:evt})}
+function nextRecipient(from){const g=game,n=g.players.length;for(let k=1;k<=n;k++){const i=(from+g.direction*k+n*3)%n;if(g.players[i].connected)return i}return from}
 function nextSeat(from){const g=game,n=g.players.length;for(let k=1;k<=n;k++){const i=(from+g.direction*k+n*3)%n;if(g.players[i].connected){if(g.skip===i){g.skip=null;continue}return i}}return from}
 function checkWinner(actor){if(game.players[actor].hand.length===0){game.winner=actor;game.log=game.players[actor].name+"の勝利！"}}
 function nextTurn(actor){if(!game||game.winner!==null)return;if(game.bonus===actor){game.bonus=null;game.turn=actor}else game.turn=nextSeat(actor);game.log=game.players[game.turn].name+"の番です。"}
 function afterEffect(actor){checkWinner(actor);if(game.winner===null)nextTurn(actor);publish()}
 function attack(target,n){if(game.players[target].shield){game.players[target].shield=false;return game.players[target].name+"のシールドがドロー"+n+"を防ぎました。"}for(let k=0;k<n;k++)game.players[target].hand.push(makeCard());announceEvent({kind:"draw",target,count:n});return game.players[target].name+"が山札から"+n+"枚引きました。"}
 function applyPlay(actor,cardId,side){const g=game,p=g.players[actor],idx=p.hand.findIndex(c=>c.id===cardId);if(idx<0||!["left","right"].includes(side))return;const c=p.hand[idx];if(!valid(g,c,side))return;const ends=neighbors(g);p.hand.splice(idx,1);if(c.type===5){if(side==="left")c.right=ends.left.left;else c.left=ends.right.right}if(side==="left")g.board.splice(g.board.indexOf(ends.left),0,c);else g.board.splice(g.board.indexOf(ends.right)+1,0,c);g.lastId=c.id;g.lastSide=side;g.log=p.name+"が「"+NAMES[c.type]+"」を"+(side==="left"?"左":"右")+"に置きました。";announceEvent({kind:"play",actor,card:c.type});
- const target=nextSeat(actor);
+ const target=nextRecipient(actor);
  if(c.type===1||c.type===10||c.type===12)g.log=attack(target,c.type===1?1:c.type===10?2:3);
  if(c.type===2){g.direction*=-1;g.log="進行方向が逆になりました。"}
  if(c.type===8){p.shield=true;g.log=p.name+"がシールドを使いました。"}
@@ -127,7 +128,7 @@ function applyPlay(actor,cardId,side){const g=game,p=g.players[actor],idx=p.hand
  afterEffect(actor)
 }
 function handleChoice(actor,choice){const g=game,pen=g.pending;if(!pen||pen.actor!==actor)return;const p=g.players[actor],type=pen.type;let text="";
- if([4,6,7,14].includes(type)){const index=p.hand.findIndex(c=>c.id===choice.cardId);if(index<0)return;const c=p.hand[index];if(type===4){p.hand.splice(index,1);text=p.name+"が「"+NAMES[c.type]+"」を追加で捨てました。"}else if(type===6){p.hand.splice(index,1);p.hand.push(makeCard());text=p.name+"が「"+NAMES[c.type]+"」を交換しました。"}else if(type===7){const to=nextSeat(actor);p.hand.splice(index,1);g.players[to].hand.push(c);text=p.name+"が"+g.players[to].name+"にカードを渡しました。"}else{const ends=neighbors(g);c.left=ends.right.right;c.right=ends.left.left;text=p.name+"が「"+NAMES[c.type]+"」を修理しました。"}}
+ if([4,6,7,14].includes(type)){const index=p.hand.findIndex(c=>c.id===choice.cardId);if(index<0)return;const c=p.hand[index];if(type===4){p.hand.splice(index,1);text=p.name+"が「"+NAMES[c.type]+"」を追加で捨てました。"}else if(type===6){p.hand.splice(index,1);p.hand.push(makeCard());text=p.name+"が「"+NAMES[c.type]+"」を交換しました。"}else if(type===7){const to=nextRecipient(actor);p.hand.splice(index,1);g.players[to].hand.push(c);text=p.name+"が"+g.players[to].name+"にカードを渡しました。"}else{const ends=neighbors(g);c.left=ends.right.right;c.right=ends.left.left;text=p.name+"が「"+NAMES[c.type]+"」を修理しました。"}}
  else if([3,13,16].includes(type)){const target=Number(choice.target);if(!Number.isInteger(target)||target<0||target>=g.players.length||target===actor||!g.players[target].connected)return;const other=g.players[target];if(type===3){g.skip=target;text=other.name+"の次の手番を飛ばします。"}else if(type===13){if(!other.hand.length)return;const idx=rand(other.hand.length);const c=other.hand.splice(idx,1)[0];p.hand.push(c);text=p.name+"が"+other.name+"のカードを1枚盗みました。"}else{const temp=p.hand;p.hand=other.hand;other.hand=temp;text=p.name+"と"+other.name+"の手札を交換しました。"}}
  else return;
  g.pending=null;g.log=text;afterEffect(actor)
