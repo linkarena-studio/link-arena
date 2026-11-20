@@ -5,17 +5,22 @@
 (function(){
 "use strict";
 const AudioContextClass=window.AudioContext||window.webkitAudioContext;
-let ctx=null,master=null,reverbSend=null,muted=false,volume=.35,timer=null;
+let ctx=null,master=null,reverbSend=null,muted=false,volume=.16,timer=null;
+let trackId="journey";
+const TRACK_NAMES={retro:"はじまりのパズル（レトロ）",journey:"旅路の灯（ファンタジー）",dawn:"暁の翼（新曲）"};
+try{const saved=JSON.parse(localStorage.getItem("la_audio_settings_v3")||"{}");if(TRACK_NAMES[saved.track])trackId=saved.track;if(Number.isFinite(saved.volume))volume=Math.max(0,Math.min(1,saved.volume));muted=saved.muted===true}catch(e){}
+function save(){try{localStorage.setItem("la_audio_settings_v3",JSON.stringify({track:trackId,volume,muted}))}catch(e){}}
+
 let nextTime=0,step=0;
 const EIGHTH=60/94/2; // 6/8, gentle flowing pace
-const CHORDS=[
+const JOURNEY_CHORDS=[
  [47,50,54,59], [43,47,50,55], [50,54,57,62], [45,49,52,57],
  [40,43,47,52], [43,47,50,55], [50,54,57,62], [42,45,49,54],
  [47,50,54,59], [43,47,50,55], [50,54,57,62], [45,49,52,57],
  [40,43,47,52], [43,47,50,55], [45,49,52,57], [47,50,54,59]
 ];
 // Each phrase totals six eighth-note pulses; this is an entirely new tune.
-const MELODY=[
+const JOURNEY_MELODY=[
  [[74,2],[78,1],[81,2],[78,1]],
  [[79,2],[78,1],[74,3]],
  [[76,1],[78,1],[81,2],[78,2]],
@@ -33,9 +38,51 @@ const MELODY=[
  [[76,1],[78,1],[81,2],[76,2]],
  [[74,3],[71,3]]
 ];
-const LINE=MELODY.flatMap(bar=>{
+const JOURNEY_LINE=JOURNEY_MELODY.flatMap(bar=>{
  const out=[];for(const [note,len] of bar){out.push({note,len});for(let i=1;i<len;i++)out.push(null)}return out;
 });
+
+/* Original alternate themes: no melodies extracted from the linked video. */
+const RETRO_CHORDS=[
+ [48,52,55,60],[45,48,52,57],[41,45,48,53],[43,47,50,55],
+ [48,52,55,60],[45,48,52,57],[41,45,48,53],[43,47,50,55]
+];
+const RETRO_NOTES=[
+ 72,null,76,79,76,null,74,null,72,76,79,null,81,79,76,null,
+ 77,null,81,84,81,null,79,77,76,null,74,72,74,79,76,null
+];
+const DAWN_CHORDS=[
+ [45,48,52,57],[41,45,48,53],[48,52,55,60],[43,47,50,55],
+ [45,48,52,57],[41,45,48,53],[40,43,47,52],[43,47,50,55],
+ [45,48,52,57],[41,45,48,53],[48,52,55,60],[43,47,50,55],
+ [41,45,48,53],[43,47,50,55],[45,48,52,57],[45,48,52,57]
+];
+// 6/8, original energetic but airy theme in A minor / C-major colors.
+const DAWN_MELODY=[
+ [[81,1],[84,1],[88,2],[84,1],[81,1]],
+ [[77,2],[81,1],[84,1],[81,2]],
+ [[79,1],[81,1],[84,2],[86,1],[84,1]],
+ [[79,2],[76,1],[74,1],[76,2]],
+ [[81,2],[84,1],[88,2],[89,1]],
+ [[88,1],[84,1],[81,1],[79,1],[77,2]],
+ [[76,2],[79,1],[83,1],[86,2]],
+ [[84,3],[81,1],[79,2]],
+ [[84,1],[86,1],[88,1],[91,1],[88,2]],
+ [[89,2],[88,1],[84,1],[81,2]],
+ [[83,1],[86,1],[88,2],[86,1],[83,1]],
+ [[81,2],[79,1],[76,3]],
+ [[77,1],[81,1],[84,1],[89,1],[88,2]],
+ [[86,2],[83,1],[81,1],[79,2]],
+ [[81,2],[84,1],[88,1],[86,2]],
+ [[84,2],[81,1],[79,1],[81,2]]
+];
+function expandBars(bars){return bars.flatMap(bar=>{const out=[];for(const [note,len] of bar){out.push({note,len});for(let i=1;i<len;i++)out.push(null)}return out})}
+const DAWN_LINE=expandBars(DAWN_MELODY);
+const tracks={
+ journey:{seconds:EIGHTH,pulses:6,line:JOURNEY_LINE,chords:JOURNEY_CHORDS,melody:"flute"},
+ retro:{seconds:60/132/2,pulses:4,line:RETRO_NOTES.map(x=>x===null?null:{note:x,len:1}),chords:RETRO_CHORDS,melody:"pluck"},
+ dawn:{seconds:60/126/2,pulses:6,line:DAWN_LINE,chords:DAWN_CHORDS,melody:"flute"}
+};
 const midi=n=>440*Math.pow(2,(n-69)/12);
 function init(){
  if(ctx||!AudioContextClass)return;
@@ -88,23 +135,28 @@ function synth(note,start,duration,kind="flute",level=.07){
  }catch(e){}
 }
 function musicStep(i,t){
- const bar=Math.floor(i/6)%16,pos=i%6,chord=CHORDS[bar],phrase=LINE[i%LINE.length];
- if(pos===0){
-  // Gentle sustained three-part harmony and a low bowed-bass impression.
-  for(const n of chord.slice(1))synth(n+12,t,EIGHTH*5.6,"pad",.009);
-  synth(chord[0]-12,t,EIGHTH*4,"bass",.067);
+ const tr=tracks[trackId],pos=i%tr.pulses,bar=Math.floor(i/tr.pulses)%tr.chords.length;
+ const chord=tr.chords[bar],phrase=tr.line[i%tr.line.length],eighth=tr.seconds;
+ if(trackId==="retro"){
+  if(pos===0){synth(chord[0]-12,t,eighth*3,"bass",.047);for(const n of chord.slice(1))synth(n+12,t,eighth*3.7,"pad",.004)}
+  synth(chord[[1,2,3,2][pos]]+12,t,eighth*.55,"pluck",.034);
+  if(phrase)synth(phrase.note,t,eighth*.83,"pluck",.09);
+ }else if(trackId==="dawn"){
+  if(pos===0){synth(chord[0]-12,t,eighth*5.4,"bass",.056);for(const n of chord.slice(1))synth(n+12,t,eighth*5.6,"pad",.009)}
+  synth(chord[[1,2,3,2,1,3][pos]]+12,t,eighth*.75,"pluck",.038);
+  if(phrase)synth(phrase.note,t,Math.max(eighth*.9,phrase.len*eighth*.9),"flute",.091);
+ }else{
+  if(pos===0){for(const n of chord.slice(1))synth(n+12,t,eighth*5.6,"pad",.009);synth(chord[0]-12,t,eighth*4,"bass",.067)}
+  synth(chord[[1,2,3,2,1,2][pos]]+12,t,eighth*.72,"pluck",pos===0?.034:.028);
+  if(phrase)synth(phrase.note,t,phrase.len*eighth*.88,"flute",.083);
  }
- // Harp / lute-like broken chords; the pulse is intentionally understated.
- const arp=[1,2,3,2,1,2];
- synth(chord[arp[pos]]+12,t,EIGHTH*.72,"pluck",pos===0?.034:.028);
- if(phrase)synth(phrase.note,t,phrase.len*EIGHTH*.88,"flute",.083);
 }
 function schedule(){
  if(!ctx||muted||document.hidden||ctx.state!=="running")return;
  const until=ctx.currentTime+.34;
  while(nextTime<until){
   musicStep(step,nextTime);
-  nextTime+=EIGHTH;step=(step+1)%LINE.length;
+  nextTime+=tracks[trackId].seconds;step=(step+1)%(tracks[trackId].pulses*tracks[trackId].chords.length);
  }
 }
 function start(){
@@ -142,16 +194,21 @@ function setVolume(v){
  const n=Number(v);if(!Number.isFinite(n))return volume;
  volume=Math.max(0,Math.min(1,n));
  if(ctx&&master)master.gain.setTargetAtTime(muted?0:volume,ctx.currentTime,.03);
- return volume;
+ save();return volume;
 }
 function setMuted(v){
  muted=Boolean(v);
  if(ctx&&master)master.gain.setTargetAtTime(muted?0:volume,ctx.currentTime,.02);
  if(muted){if(timer){clearInterval(timer);timer=null}}
  else {nextTime=ctx?ctx.currentTime+.07:0;start()}
- return muted;
+ save();return muted;
 }
 function toggle(){return setMuted(!muted)}
+function setTrack(id){
+ if(!tracks[id])return trackId;
+ trackId=id;step=0;nextTime=ctx?ctx.currentTime+.4:0;
+ save();if(!muted)start();return trackId;
+}
 function stop(){
  if(timer){clearInterval(timer);timer=null}
  if(ctx&&master)master.gain.setTargetAtTime(0,ctx.currentTime,.02);
@@ -161,5 +218,5 @@ document.addEventListener("visibilitychange",()=>{
  if(document.hidden){if(timer){clearInterval(timer);timer=null};if(ctx&&master)master.gain.setTargetAtTime(0,ctx.currentTime,.02)}
  else if(ctx&&!muted){master.gain.setTargetAtTime(volume,ctx.currentTime,.03);nextTime=ctx.currentTime+.07;start()}
 });
-window.LAAudio={start,cue,setVolume,setMuted,toggle,stop,get muted(){return muted},get volume(){return volume},track:"旅路の灯 — Lanterns on the Road"};
+window.LAAudio={start,cue,setVolume,setMuted,toggle,stop,setTrack,get muted(){return muted},get volume(){return volume},get track(){return trackId},tracks:TRACK_NAMES};
 })();
