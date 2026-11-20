@@ -1,60 +1,165 @@
-/* LINK ARENA original procedural audio, no external recordings */
+/* LINK ARENA — "旅路の灯" / Lanterns on the Road
+ * Original 6/8 fantasy-travel theme. Melody and harmony composed for LINK ARENA.
+ * No samples, recordings, copyrighted melodies or external sound assets.
+ */
 (function(){
- "use strict";
- let context=null,master=null,timer=null,step=0,muted=false,volume=.35;
- const AudioContextClass=window.AudioContext||window.webkitAudioContext;
- const melody=[76,null,79,null,81,79,76,null,74,null,76,79,74,null,71,null,
- 72,null,76,79,81,null,79,null,76,74,72,null,71,null,74,null];
- const bass=[48,43,45,40,48,43,45,47];
- const noteHz=n=>440*Math.pow(2,(n-69)/12);
- function init(){
-  if(context||!AudioContextClass)return;
-  try{context=new AudioContextClass();master=context.createGain();master.gain.value=volume;master.connect(context.destination)}
-  catch(e){context=null;master=null}
- }
- function tone(n,d=.12,type="sine",gain=.12,delay=0){
-  if(!context||!master||muted||document.hidden)return;
-  const start=context.currentTime+delay;
-  try{
-   const osc=context.createOscillator(),env=context.createGain();
-   osc.type=type;osc.frequency.setValueAtTime(noteHz(n),start);
-   env.gain.setValueAtTime(.0001,start);
-   env.gain.exponentialRampToValueAtTime(Math.max(.002,gain),start+.012);
-   env.gain.exponentialRampToValueAtTime(.0001,start+d);
-   osc.connect(env);env.connect(master);osc.start(start);osc.stop(start+d+.025);
-  }catch(e){}
- }
- function tick(){
-  if(muted||!context||context.state!=="running"||document.hidden)return;
-  const i=step++%32,m=melody[i];
-  if(m!==null)tone(m,.18,"triangle",.045);
-  if(i%4===0)tone(bass[Math.floor(step/4-1)%bass.length+ (Math.floor(step/4-1)%bass.length<0?bass.length:0)],.45,"sine",.055);
-  if(i%8===4)tone(60,.13,"sine",.017);
- }
- function start(){
-  if(muted)return;
-  init();if(!context)return;
-  try{const result=context.resume();if(result&&result.catch)result.catch(()=>{})}catch(e){}
-  if(!timer){tick();timer=setInterval(tick,235)}
- }
- function cue(name){
-  if(muted)return;
-  init();if(!context)return;
-  try{const p=context.resume();if(p&&p.catch)p.catch(()=>{})}catch(e){}
-  switch(name){
-   case "select":tone(79,.08,"sine",.13);break;
-   case "deal":case "draw":tone(74,.08,"triangle",.11);tone(79,.11,"sine",.09,.07);break;
-   case "place":tone(69,.09,"triangle",.18);tone(76,.18,"triangle",.15,.08);break;
-   case "special":tone(77,.1,"sine",.17);tone(81,.12,"triangle",.14,.12);tone(84,.22,"sine",.13,.25);break;
-   case "win":[72,76,79,84].forEach((n,i)=>tone(n,.36,"triangle",.17,i*.14));break;
-   case "lose":[74,71,67].forEach((n,i)=>tone(n,.32,"sine",.13,i*.17));break;
-   case "join":tone(76,.1,"sine",.12);tone(81,.2,"triangle",.12,.11);break;
+"use strict";
+const AudioContextClass=window.AudioContext||window.webkitAudioContext;
+let ctx=null,master=null,reverbSend=null,muted=false,volume=.35,timer=null;
+let nextTime=0,step=0;
+const EIGHTH=60/94/2; // 6/8, gentle flowing pace
+const CHORDS=[
+ [47,50,54,59], [43,47,50,55], [50,54,57,62], [45,49,52,57],
+ [40,43,47,52], [43,47,50,55], [50,54,57,62], [42,45,49,54],
+ [47,50,54,59], [43,47,50,55], [50,54,57,62], [45,49,52,57],
+ [40,43,47,52], [43,47,50,55], [45,49,52,57], [47,50,54,59]
+];
+// Each phrase totals six eighth-note pulses; this is an entirely new tune.
+const MELODY=[
+ [[74,2],[78,1],[81,2],[78,1]],
+ [[79,2],[78,1],[74,3]],
+ [[76,1],[78,1],[81,2],[78,2]],
+ [[76,2],[73,1],[71,3]],
+ [[71,2],[74,1],[76,2],[78,1]],
+ [[79,2],[81,1],[83,2],[81,1]],
+ [[78,2],[76,1],[74,3]],
+ [[73,2],[74,1],[78,3]],
+ [[81,3],[83,1],[86,2]],
+ [[83,2],[81,1],[79,1],[78,2]],
+ [[81,2],[78,1],[76,2],[74,1]],
+ [[76,3],[73,1],[76,2]],
+ [[78,2],[79,1],[81,2],[83,1]],
+ [[81,2],[79,1],[78,3]],
+ [[76,1],[78,1],[81,2],[76,2]],
+ [[74,3],[71,3]]
+];
+const LINE=MELODY.flatMap(bar=>{
+ const out=[];for(const [note,len] of bar){out.push({note,len});for(let i=1;i<len;i++)out.push(null)}return out;
+});
+const midi=n=>440*Math.pow(2,(n-69)/12);
+function init(){
+ if(ctx||!AudioContextClass)return;
+ try{
+  ctx=new AudioContextClass();
+  master=ctx.createGain();
+  master.gain.value=volume;
+  const soft=ctx.createDynamicsCompressor();
+  soft.threshold.value=-15;soft.knee.value=15;soft.ratio.value=2.4;
+  soft.attack.value=.008;soft.release.value=.28;
+  master.connect(soft);soft.connect(ctx.destination);
+  // Low-level stereo-ish room echoes provide depth without extra files.
+  const delay=ctx.createDelay(1),wet=ctx.createGain(),feedback=ctx.createGain();
+  delay.delayTime.value=.245;wet.gain.value=.16;feedback.gain.value=.17;
+  delay.connect(wet);wet.connect(master);
+  delay.connect(feedback);feedback.connect(delay);
+  reverbSend=delay;
+ }catch(e){ctx=null;master=null;reverbSend=null}
+}
+function synth(note,start,duration,kind="flute",level=.07){
+ if(!ctx||!master||muted)return;
+ const freq=midi(note),t=Math.max(ctx.currentTime+.001,start),len=Math.max(.06,duration);
+ try{
+  const out=ctx.createGain(),filter=ctx.createBiquadFilter();
+  filter.type="lowpass";
+  filter.frequency.value=kind==="pad"?1150:kind==="bass"?550:kind==="pluck"?2300:3500;
+  out.connect(filter);filter.connect(master);
+  if(reverbSend&&kind!=="bass"){const send=ctx.createGain();send.gain.value=kind==="flute"?.23:.12;filter.connect(send);send.connect(reverbSend)}
+  const attack=kind==="pad"?.14:kind==="flute"?.035:kind==="bass"?.035:.008;
+  const hold=Math.max(t+attack+.02,t+len-(kind==="pad"?.3:.06));
+  const release=kind==="pad"?.36:kind==="flute"?.23:kind==="bass"?.18:.16;
+  out.gain.setValueAtTime(.0001,t);
+  out.gain.linearRampToValueAtTime(level,t+attack);
+  if(kind==="pluck")out.gain.exponentialRampToValueAtTime(Math.max(.0002,level*.26),hold);
+  else out.gain.setValueAtTime(level,hold);
+  out.gain.exponentialRampToValueAtTime(.0001,t+len+release);
+  const primary=ctx.createOscillator();
+  primary.type=kind==="flute"?"sine":kind==="pad"?"sawtooth":kind==="bass"?"sine":"triangle";
+  primary.frequency.setValueAtTime(freq,t);
+  if(kind==="flute"){primary.detune.setValueAtTime(-2,t);primary.detune.linearRampToValueAtTime(2,t+len)}
+  primary.connect(out);primary.start(t);primary.stop(t+len+release+.04);
+  if(kind==="flute"||kind==="pad"){
+   const upper=ctx.createOscillator(),upperGain=ctx.createGain();
+   upper.type=kind==="flute"?"sine":"triangle";
+   upper.frequency.value=freq*(kind==="flute"?2:1.003);
+   upperGain.gain.value=kind==="flute"?.11:.19;
+   upper.connect(upperGain);upperGain.connect(out);
+   upper.start(t);upper.stop(t+len+release+.04);
   }
+ }catch(e){}
+}
+function musicStep(i,t){
+ const bar=Math.floor(i/6)%16,pos=i%6,chord=CHORDS[bar],phrase=LINE[i%LINE.length];
+ if(pos===0){
+  // Gentle sustained three-part harmony and a low bowed-bass impression.
+  for(const n of chord.slice(1))synth(n+12,t,EIGHTH*5.6,"pad",.009);
+  synth(chord[0]-12,t,EIGHTH*4,"bass",.067);
  }
- function setVolume(v){const n=Number(v);if(!Number.isFinite(n))return;volume=Math.max(0,Math.min(1,n));if(master)master.gain.setTargetAtTime(volume,context.currentTime,.02);return volume}
- function setMuted(m){muted=Boolean(m);if(muted){if(context&&context.state==="running")context.suspend().catch(()=>{})}else start();return muted}
- function toggle(){return setMuted(!muted)}
- function stop(){if(timer){clearInterval(timer);timer=null}if(context&&context.state==="running")context.suspend().catch(()=>{})}
- window.LAAudio={start,cue,setVolume,setMuted,toggle,stop,get muted(){return muted},get volume(){return volume}};
- document.addEventListener("visibilitychange",()=>{if(document.hidden)return;if(timer&&!muted&&context&&context.state==="suspended")context.resume().catch(()=>{})});
+ // Harp / lute-like broken chords; the pulse is intentionally understated.
+ const arp=[1,2,3,2,1,2];
+ synth(chord[arp[pos]]+12,t,EIGHTH*.72,"pluck",pos===0?.034:.028);
+ if(phrase)synth(phrase.note,t,phrase.len*EIGHTH*.88,"flute",.083);
+}
+function schedule(){
+ if(!ctx||muted||document.hidden||ctx.state!=="running")return;
+ const until=ctx.currentTime+.34;
+ while(nextTime<until){
+  musicStep(step,nextTime);
+  nextTime+=EIGHTH;step=(step+1)%LINE.length;
+ }
+}
+function start(){
+ if(muted)return;
+ init();if(!ctx)return;
+ try{
+  const resumed=ctx.resume();
+  if(resumed?.catch)resumed.catch(()=>{});
+ }catch(e){}
+ if(!timer){
+  nextTime=Math.max(ctx.currentTime+.06,nextTime);
+  timer=setInterval(schedule,55);
+  schedule();
+ }
+}
+function oneShot(note,duration=.14,kind="pluck",level=.17,delay=0){
+ if(!ctx||muted||document.hidden)return;
+ synth(note,ctx.currentTime+.025+delay,duration,kind,level);
+}
+function cue(name){
+ if(muted)return;
+ init();if(!ctx)return;
+ try{ctx.resume().catch(()=>{})}catch(e){}
+ switch(name){
+ case "select":oneShot(79,.075,"pluck",.14);break;
+ case "deal":case "draw":oneShot(74,.095,"pluck",.14);oneShot(81,.12,"flute",.12,.08);break;
+ case "place":oneShot(69,.09,"pluck",.2);oneShot(76,.19,"pluck",.17,.07);break;
+ case "special":oneShot(77,.13,"flute",.2);oneShot(81,.17,"pluck",.18,.13);oneShot(86,.22,"flute",.19,.27);break;
+ case "win":[74,78,81,86].forEach((n,i)=>oneShot(n,.36,"flute",.2,i*.16));break;
+ case "lose":[74,71,66].forEach((n,i)=>oneShot(n,.28,"flute",.13,i*.18));break;
+ case "join":oneShot(76,.1,"pluck",.12);oneShot(81,.25,"flute",.13,.12);break;
+ }
+}
+function setVolume(v){
+ const n=Number(v);if(!Number.isFinite(n))return volume;
+ volume=Math.max(0,Math.min(1,n));
+ if(ctx&&master)master.gain.setTargetAtTime(muted?0:volume,ctx.currentTime,.03);
+ return volume;
+}
+function setMuted(v){
+ muted=Boolean(v);
+ if(ctx&&master)master.gain.setTargetAtTime(muted?0:volume,ctx.currentTime,.02);
+ if(muted){if(timer){clearInterval(timer);timer=null}}
+ else {nextTime=ctx?ctx.currentTime+.07:0;start()}
+ return muted;
+}
+function toggle(){return setMuted(!muted)}
+function stop(){
+ if(timer){clearInterval(timer);timer=null}
+ if(ctx&&master)master.gain.setTargetAtTime(0,ctx.currentTime,.02);
+ if(ctx&&ctx.state==="running")ctx.suspend().catch(()=>{});
+}
+document.addEventListener("visibilitychange",()=>{
+ if(document.hidden){if(timer){clearInterval(timer);timer=null};if(ctx&&master)master.gain.setTargetAtTime(0,ctx.currentTime,.02)}
+ else if(ctx&&!muted){master.gain.setTargetAtTime(volume,ctx.currentTime,.03);nextTime=ctx.currentTime+.07;start()}
+});
+window.LAAudio={start,cue,setVolume,setMuted,toggle,stop,get muted(){return muted},get volume(){return volume},track:"旅路の灯 — Lanterns on the Road"};
 })();
