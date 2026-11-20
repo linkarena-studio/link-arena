@@ -7,7 +7,7 @@
 const AudioContextClass=window.AudioContext||window.webkitAudioContext;
 let ctx=null,master=null,reverbSend=null,muted=false,volume=.16,timer=null;
 let trackId="journey";
-const TRACK_NAMES={retro:"はじまりのパズル（レトロ）",journey:"旅路の灯（ファンタジー）",dawn:"暁の翼（新曲）"};
+const TRACK_NAMES={retro:"はじまりのパズル（レトロ）",journey:"旅路の灯（ファンタジー）",dawn:"暁の翼（新曲）",velocity:"閃光ドライブ（高速バトル）"};
 try{const saved=JSON.parse(localStorage.getItem("la_audio_settings_v3")||"{}");if(TRACK_NAMES[saved.track])trackId=saved.track;if(Number.isFinite(saved.volume))volume=Math.max(0,Math.min(1,saved.volume));muted=saved.muted===true}catch(e){}
 function save(){try{localStorage.setItem("la_audio_settings_v3",JSON.stringify({track:trackId,volume,muted}))}catch(e){}}
 
@@ -78,10 +78,41 @@ const DAWN_MELODY=[
 ];
 function expandBars(bars){return bars.flatMap(bar=>{const out=[];for(const [note,len] of bar){out.push({note,len});for(let i=1;i<len;i++)out.push(null)}return out})}
 const DAWN_LINE=expandBars(DAWN_MELODY);
+
+/* 閃光ドライブ — original high-energy battle theme, 160 BPM / 4/4.
+   16 bars, 8 eighth-note slots per bar, punchy original lead and rhythm. */
+const VELOCITY_CHORDS=[
+ [40,43,47,52],[36,40,43,48],[43,47,50,55],[38,42,45,50],
+ [40,43,47,52],[36,40,43,48],[45,48,52,57],[47,50,54,59],
+ [40,43,47,52],[43,47,50,55],[36,40,43,48],[38,42,45,50],
+ [45,48,52,57],[43,47,50,55],[47,50,54,59],[40,43,47,52]
+];
+// Each row sums to exactly eight eighth-note steps.
+const VELOCITY_MELODY=[
+ [[76,1],[79,1],[83,2],[81,1],[79,1],[76,2]],
+ [[79,1],[76,1],[72,2],[76,1],[79,1],[84,2]],
+ [[79,2],[83,1],[86,1],[83,2],[79,2]],
+ [[81,1],[78,1],[74,2],[78,1],[81,1],[86,2]],
+ [[88,1],[86,1],[83,1],[79,1],[83,2],[86,2]],
+ [[84,2],[79,1],[76,1],[79,1],[84,1],[88,2]],
+ [[81,1],[84,1],[88,2],[84,1],[81,1],[76,2]],
+ [[83,1],[86,1],[90,2],[86,1],[83,1],[79,2]],
+ [[88,2],[91,1],[88,1],[86,1],[83,1],[79,2]],
+ [[86,1],[83,1],[79,1],[83,1],[86,2],[91,2]],
+ [[84,1],[88,1],[91,2],[88,1],[84,1],[79,2]],
+ [[86,1],[81,1],[78,2],[81,1],[86,1],[90,2]],
+ [[88,1],[84,1],[81,1],[84,1],[88,2],[93,2]],
+ [[91,2],[86,1],[83,1],[86,1],[91,1],[95,2]],
+ [[90,1],[86,1],[83,2],[81,1],[78,1],[74,2]],
+ [[79,1],[83,1],[88,2],[83,1],[79,1],[76,2]]
+];
+const VELOCITY_LINE=expandBars(VELOCITY_MELODY);
+
 const tracks={
  journey:{seconds:EIGHTH,pulses:6,line:JOURNEY_LINE,chords:JOURNEY_CHORDS,melody:"flute"},
  retro:{seconds:60/132/2,pulses:4,line:RETRO_NOTES.map(x=>x===null?null:{note:x,len:1}),chords:RETRO_CHORDS,melody:"pluck"},
- dawn:{seconds:60/126/2,pulses:6,line:DAWN_LINE,chords:DAWN_CHORDS,melody:"flute"}
+ dawn:{seconds:60/126/2,pulses:6,line:DAWN_LINE,chords:DAWN_CHORDS,melody:"flute"},
+ velocity:{seconds:60/160/2,pulses:8,line:VELOCITY_LINE,chords:VELOCITY_CHORDS,melody:"lead"}
 };
 const midi=n=>440*Math.pow(2,(n-69)/12);
 function init(){
@@ -108,36 +139,83 @@ function synth(note,start,duration,kind="flute",level=.07){
  try{
   const out=ctx.createGain(),filter=ctx.createBiquadFilter();
   filter.type="lowpass";
-  filter.frequency.value=kind==="pad"?1150:kind==="bass"?550:kind==="pluck"?2300:3500;
+  filter.frequency.value=kind==="pad"?1150:kind==="bass"?550:kind==="pluck"?2300:kind==="lead"?2700:3500;
   out.connect(filter);filter.connect(master);
   if(reverbSend&&kind!=="bass"){const send=ctx.createGain();send.gain.value=kind==="flute"?.23:.12;filter.connect(send);send.connect(reverbSend)}
-  const attack=kind==="pad"?.14:kind==="flute"?.035:kind==="bass"?.035:.008;
+  const attack=kind==="pad"?.14:kind==="flute"?.035:kind==="bass"?.035:kind==="lead"?.009:.008;
   const hold=Math.max(t+attack+.02,t+len-(kind==="pad"?.3:.06));
-  const release=kind==="pad"?.36:kind==="flute"?.23:kind==="bass"?.18:.16;
+  const release=kind==="pad"?.36:kind==="flute"?.23:kind==="bass"?.18:kind==="lead"?.14:.16;
   out.gain.setValueAtTime(.0001,t);
   out.gain.linearRampToValueAtTime(level,t+attack);
   if(kind==="pluck")out.gain.exponentialRampToValueAtTime(Math.max(.0002,level*.26),hold);
   else out.gain.setValueAtTime(level,hold);
   out.gain.exponentialRampToValueAtTime(.0001,t+len+release);
   const primary=ctx.createOscillator();
-  primary.type=kind==="flute"?"sine":kind==="pad"?"sawtooth":kind==="bass"?"sine":"triangle";
+  primary.type=kind==="flute"?"sine":kind==="pad"||kind==="lead"?"sawtooth":kind==="bass"?"sine":"triangle";
   primary.frequency.setValueAtTime(freq,t);
   if(kind==="flute"){primary.detune.setValueAtTime(-2,t);primary.detune.linearRampToValueAtTime(2,t+len)}
   primary.connect(out);primary.start(t);primary.stop(t+len+release+.04);
-  if(kind==="flute"||kind==="pad"){
+  if(kind==="flute"||kind==="pad"||kind==="lead"){
    const upper=ctx.createOscillator(),upperGain=ctx.createGain();
-   upper.type=kind==="flute"?"sine":"triangle";
-   upper.frequency.value=freq*(kind==="flute"?2:1.003);
-   upperGain.gain.value=kind==="flute"?.11:.19;
+   upper.type=kind==="flute"?"sine":kind==="lead"?"square":"triangle";
+   upper.frequency.value=freq*(kind==="flute"?2:kind==="lead"?1.006:1.003);
+   upperGain.gain.value=kind==="flute"?.11:kind==="lead"?.15:.19;
    upper.connect(upperGain);upperGain.connect(out);
    upper.start(t);upper.stop(t+len+release+.04);
+  }
+ }catch(e){}
+}
+
+let noiseBuffer=null;
+function noiseAt(t,duration,level,filterFrequency,kind="highpass"){
+ if(!ctx||!master||muted)return;
+ try{
+  if(!noiseBuffer){
+   noiseBuffer=ctx.createBuffer(1,ctx.sampleRate,ctx.sampleRate);
+   const samples=noiseBuffer.getChannelData(0);
+   // Random noise is original synthesizer output, not a recorded sample.
+   for(let i=0;i<samples.length;i++)samples[i]=Math.random()*2-1;
+  }
+  const source=ctx.createBufferSource(),filter=ctx.createBiquadFilter(),env=ctx.createGain();
+  source.buffer=noiseBuffer;filter.type=kind;filter.frequency.value=filterFrequency;
+  source.connect(filter);filter.connect(env);env.connect(master);
+  const start=Math.max(ctx.currentTime+.001,t);
+  env.gain.setValueAtTime(Math.max(.001,level),start);
+  env.gain.exponentialRampToValueAtTime(.0001,start+duration);
+  source.start(start);source.stop(start+duration+.01);
+ }catch(e){}
+}
+function drum(kind,t){
+ if(!ctx||!master||muted)return;
+ try{
+  const start=Math.max(ctx.currentTime+.001,t);
+  if(kind==="kick"){
+   const o=ctx.createOscillator(),g=ctx.createGain();
+   o.type="sine";o.frequency.setValueAtTime(125,start);
+   o.frequency.exponentialRampToValueAtTime(46,start+.12);
+   g.gain.setValueAtTime(.2,start);g.gain.exponentialRampToValueAtTime(.0001,start+.2);
+   o.connect(g);g.connect(master);o.start(start);o.stop(start+.21);
+  }else if(kind==="snare"){
+   noiseAt(start,.115,.075,1000);
+   synth(49,start,.09,"pluck",.025);
+  }else if(kind==="hat"){
+   noiseAt(start,.055,.023,6500);
   }
  }catch(e){}
 }
 function musicStep(i,t){
  const tr=tracks[trackId],pos=i%tr.pulses,bar=Math.floor(i/tr.pulses)%tr.chords.length;
  const chord=tr.chords[bar],phrase=tr.line[i%tr.line.length],eighth=tr.seconds;
- if(trackId==="retro"){
+ if(trackId==="velocity"){
+  // Driving four-on-the-floor kick, snare on beats 2/4 and a tight eighth-note hat.
+  if(pos%2===0)drum("kick",t);
+  if(pos===2||pos===6)drum("snare",t);
+  drum("hat",t);
+  if(pos===0||pos===4){synth(chord[0]-12,t,eighth*1.8,"bass",.12);for(const n of chord.slice(1))synth(n+12,t,eighth*3.7,"pad",.006)}
+  if(pos===3||pos===7)synth(chord[0]-12,t,eighth*.7,"bass",.084);
+  synth(chord[[1,2,3,2,1,2,3,2][pos]]+12,t,eighth*.68,"pluck",.036);
+  if(phrase)synth(phrase.note,t,phrase.len*eighth*.92,"lead",.07);
+ }else if(trackId==="retro"){
   if(pos===0){synth(chord[0]-12,t,eighth*3,"bass",.047);for(const n of chord.slice(1))synth(n+12,t,eighth*3.7,"pad",.004)}
   synth(chord[[1,2,3,2][pos]]+12,t,eighth*.55,"pluck",.034);
   if(phrase)synth(phrase.note,t,eighth*.83,"pluck",.09);
