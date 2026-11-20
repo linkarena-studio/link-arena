@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#08291e">
-<title>LINK ARENA | プライベートルーム v0.5.1</title>
+<title>LINK ARENA | プライベートルーム v0.5.2</title>
 <style>
 *{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:system-ui,-apple-system,"Noto Sans JP",sans-serif;color:#f9efd4;background:#072a20}
 button,input{font:inherit}button{cursor:pointer;touch-action:manipulation;border:0;border-radius:10px;font-weight:800;padding:10px 14px;background:#f3d17b;color:#184433}button:disabled{opacity:.38;cursor:not-allowed}input{width:100%;border-radius:9px;background:#f9f4df;color:#153e30;border:0;padding:11px;font-size:16px}.hidden{display:none!important}a{color:#ffdb83}
@@ -25,17 +25,17 @@ main{max-width:1200px;margin:auto;padding:12px}h1{font-size:23px;color:#ffdd89;m
 .hand-title{display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:12px;min-height:18px}
 .hand-title #message{font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right}
 .hand-row{display:flex;gap:6px;align-items:center;flex:1;min-height:0}
-.hand{display:flex;align-items:center;justify-content:safe center;gap:2px;overflow-x:auto;overflow-y:hidden;min-width:0;flex:1;height:100%;padding:3px;scrollbar-width:thin}
+.hand{display:flex;align-items:center;justify-content:flex-start;gap:5px;overflow-x:auto;overflow-y:hidden;min-width:0;flex:1;height:100%;padding:5px 7px 3px;scrollbar-width:thin;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch;touch-action:pan-x}
 .actions{display:grid;grid-template-columns:repeat(2,1fr);gap:5px;flex:0 0 clamp(155px,24vw,225px)}
 .actions button{padding:8px 2px;min-height:35px;font-size:clamp(10px,1.3vw,13px)}.actions #drawBtn{grid-column:1 / -1;background:#dbebe3}
 .info{border:1px solid #578b70;border-radius:8px;background:#062d23cc;padding:4px 7px;font-size:11px;min-height:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tile{position:relative;width:100px;height:106px;flex:0 0 100px;cursor:pointer;user-select:none;transition:transform .15s,filter .15s}
 .tile svg.outline{width:100%;height:100%;position:absolute;inset:0;overflow:visible;filter:drop-shadow(0 2px 2px #0008)}
-.tile .content{position:absolute;top:10%;bottom:13%;left:33%;right:24%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;pointer-events:none;overflow:hidden}
+.tile .content{position:absolute;top:10%;bottom:12%;left:23%;right:15%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;pointer-events:none;overflow:hidden}
 .tile .art{height:57%;width:100%;min-height:0;overflow:visible}
-.tile .name{font-size:9px;font-weight:800;line-height:1.2;color:#17382e;text-align:center;overflow-wrap:anywhere}
+.tile .name{font-size:10px;font-weight:800;line-height:1.15;color:#17382e;text-align:center;overflow-wrap:anywhere}
 .tile.selected{transform:translateY(-8px);filter:brightness(1.22) drop-shadow(0 0 5px #ffeb95)}
-.board-slot .tile{cursor:default}
+.hand .tile{scroll-snap-align:start}.board-slot .tile{cursor:default}
 .tile.land{animation:land .42s ease-out both}@keyframes land{0%{transform:translateY(-24px) scale(1.14);filter:brightness(1.7)}100%{transform:translateY(0) scale(1);filter:none}}
 #choices{position:absolute;z-index:12;inset:0;display:grid;place-items:center;background:#042218dc;padding:10px}
 .choose-box{width:min(95%,600px);background:#24543d;border:3px solid #f1d185;border-radius:19px;padding:12px;text-align:center;max-height:92%;overflow:auto}
@@ -146,7 +146,7 @@ let notifiedWinner=null;
 function renderGame(){const v=view;if(!v)return;if(v.winner!==null&&v.winner!==notifiedWinner){notifiedWinner=v.winner;window.LAAudio?.cue(v.winner===seat?"win":"lose")}else if(v.winner===null)notifiedWinner=null;$("lobby").classList.add("hidden");$("game").classList.remove("hidden");$("roomLabel").textContent="ルーム "+code;$("myName").textContent="🃏 "+v.players[seat].name+"の手札 "+v.hand.length+"枚";$("message").textContent=v.winner!==null?v.players[v.winner].name+"の勝利！":v.pending?(v.pending.actor===seat?"効果を選択してください":"効果の選択待ち"):v.turn===seat?"あなたの番です":"待機中 · "+v.players[v.turn].name+"の番";$("eventMessage").textContent=v.log;
  const o=$("opponents");o.replaceChildren();v.players.forEach((p,i)=>{if(i===seat)return;const el=document.createElement("div");el.className="opponent"+(v.turn===i?" active":"");el.innerHTML='<span>🤖 '+escapeText(p.name)+(p.connected?"":" (退出)")+'</span><strong class="badge">'+p.count+'枚</strong>';o.appendChild(el)});
  const b=$("board");b.replaceChildren();const shown=visibleCards(v);shown.forEach((c,i)=>{const slot=document.createElement("div");slot.className="board-slot";if(i===shown.length-1)slot.classList.add("last");slot.appendChild(tile(c,false));b.appendChild(slot)});
- const h=$("hand");h.replaceChildren();const n=v.hand.length,available=h.clientWidth||window.innerWidth*.7,height=h.clientHeight||105;const size=Math.max(42,Math.min(100,Math.floor(height*.98),Math.floor((available-Math.max(0,n-1)*2-6)/Math.max(1,n))));h.style.setProperty("--hand-size",size+"px");for(const c of v.hand){const t=tile(c,true);t.style.width=size+"px";t.style.flexBasis=size+"px";t.style.height=Math.round(size*1.03)+"px";h.appendChild(t)}
+ const h=$("hand");const previousScroll=h.scrollLeft;h.replaceChildren();const height=h.clientHeight||105;const size=Math.max(78,Math.min(96,Math.floor(height*.84)));h.style.setProperty("--hand-size",size+"px");for(const c of v.hand){const t=tile(c,true);t.style.width=size+"px";t.style.flexBasis=size+"px";t.style.height=Math.round(size*1.03)+"px";h.appendChild(t)}h.scrollLeft=previousScroll;
  const mine=v.turn===seat&&v.winner===null&&!v.pending;const chosen=v.hand.find(c=>c.id===selectedId);$("leftBtn").disabled=!mine||!chosen||!valid(v,chosen,"left");$("rightBtn").disabled=!mine||!chosen||!valid(v,chosen,"right");$("drawBtn").disabled=!mine;
  if(v.winner!==null)$("info").textContent=v.players[v.winner].name+"が勝利しました。もう一度遊ぶ場合は新しい部屋を作ってください。";else if(!mine&&v.pending?.actor!==seat)$("info").textContent=v.log;
  renderChoices()
