@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#08291e">
-<title>LINK ARENA | プライベートルーム v0.6.1</title>
+<title>LINK ARENA | プライベートルーム v0.6.2</title>
 <style>
 *{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:system-ui,-apple-system,"Noto Sans JP",sans-serif;color:#f9efd4;background:#072a20}
 button,input{font:inherit}button{cursor:pointer;touch-action:manipulation;border:0;border-radius:10px;font-weight:800;padding:10px 14px;background:#f3d17b;color:#184433}button:disabled{opacity:.38;cursor:not-allowed}input{width:100%;border-radius:9px;background:#f9f4df;color:#153e30;border:0;padding:11px;font-size:16px}.hidden{display:none!important}a{color:#ffdb83}
@@ -65,8 +65,8 @@ main{max-width:1200px;margin:auto;padding:12px}h1{font-size:23px;color:#ffdd89;m
   <div class="panel"><h2>友達の部屋に参加</h2><div class="field"><label for="roomInput">6桁のルームコード</label><input id="roomInput" placeholder="例：AB12CD" maxlength="6" autocapitalize="characters"></div><button class="primary secondary" id="joinBtn">ルームに参加</button></div>
  </div>
  <div class="panel hidden" id="waiting"><h2 id="waitingTitle">参加待ち</h2><div id="codeView" class="room-code">------</div><p class="small" id="crossplayHelp">PCでもスマホでも同じURLを開き、表示名を入力すれば参加できます。</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button id="copyBtn" class="secondary" style="flex:1 1 140px">招待リンクをコピー</button><button id="shareBtn" class="secondary" style="flex:1 1 120px">招待リンクを共有</button><button id="leaveBtn" style="flex:1 1 80px">退出</button></div><div id="roster" class="roster"></div><button class="primary hidden" id="startBtn">このメンバーで対戦開始</button><p class="small">2〜4人でプレイできます。作成者はプレイ中もページを閉じないでください。</p></div>
- <div class="panel status" id="status" role="status">ルームを作るか、友達のコードを入力してください。</div>
- <p class="small">パソコン（Chrome・Edgeなど）とスマホ（Safari・Chromeなど）で対戦できます。両方の端末でこのページを開き、招待リンクまたは6桁コードで同じ部屋に参加してください。部屋の作成者は対戦中もブラウザを開いておいてください。</p><p class="small">通信には外部のPeerJS Cloud（無料の接続仲介サービス）を利用します。一部の4G・5G回線やWi-Fiでは端末間通信ができません。接続エラー時は両端末を同じWi-Fiにして再試行してください。無料の中継機能では接続できない回線もあります。</p>
+ <div class="panel status" id="status" role="status">ルームを作るか、友達のコードを入力してください。</div><button id="diagnoseBtn" type="button" class="secondary" style="width:100%;margin:5px 0 10px">通信診断（接続できない場合）</button>
+ <p class="small">パソコン（Chrome・Edgeなど）とスマホ（Safari・Chromeなど）で対戦できます。両方の端末でこのページを開き、招待リンクまたは6桁コードで同じ部屋に参加してください。部屋の作成者は対戦中もブラウザを開いておいてください。</p><p class="small">通信には外部のPeerJS Cloud（無料の接続仲介サービス）を利用します。一部の4G・5G回線やWi-Fiでは端末間通信ができません。接続エラー時は両端末を同じWi-Fiにして再試行してください。無料TURN中継サービスは終了しているため、直接通信できない環境では別途中継サーバーが必要です。</p>
 </section>
 <section id="game" class="hidden">
  <div id="gameHead"><strong>LINK ARENA · プライベート対戦</strong><span id="roomLabel"></span><div class="audio-controls"><button id="audioMute" title="音声切り替え" aria-label="音声をミュート">🔊</button><input id="audioVolume" aria-label="音量" type="range" min="0" max="100" value="35"></div><button id="exitGameBtn" class="secondary" style="padding:5px 9px">退出</button></div>
@@ -101,16 +101,27 @@ function hostId(c){return "link-arena-room-"+c.toLowerCase()}
 // PeerJS Cloud is signaling only. Try UDP and TCP TURN relay paths as well as STUN.
 // The public PeerJS TURN service is best-effort; a managed TURN server is needed
 // for guaranteed service across restrictive mobile NATs / firewalls.
-const PEER_OPTIONS={config:{iceServers:[
- {urls:["stun:stun.l.google.com:19302","stun:stun1.l.google.com:19302"]},
- {urls:[
-  "turn:eu-0.turn.peerjs.com:3478?transport=udp",
-  "turn:us-0.turn.peerjs.com:3478?transport=udp",
-  "turn:eu-0.turn.peerjs.com:3478?transport=tcp",
-  "turn:us-0.turn.peerjs.com:3478?transport=tcp"
- ],username:"peerjs",credential:"peerjsp"}
- ],iceCandidatePoolSize:4,sdpSemantics:"unified-plan"}};
-function connectionHelp(err){const msg=String(err?.message||"");if(err?.type==="webrtc"||err?.type==="negotiation-failed"||/Negotiation of connection|ICE failed|connection.*failed/i.test(msg))return "端末同士の通信が確立できませんでした。作成者の画面を開いたまま、まずスマホをWi-Fiに切り替えて再参加してください。異なる回線で通信できない場合はTURN中継サーバーが必要です。";return null}
+// The free PeerJS TURN relay was discontinued. A dead TURN entry can only
+// slow down candidate checks. Try normal LAN/direct WebRTC via STUN instead.
+const ICE_SERVERS=[{urls:["stun:stun.l.google.com:19302","stun:stun1.l.google.com:19302"]}];
+const PEER_OPTIONS={config:{iceServers:ICE_SERVERS,iceTransportPolicy:"all",sdpSemantics:"unified-plan"}};
+function connectionHelp(err){const msg=String(err?.message||"");if(err?.type==="webrtc"||err?.type==="negotiation-failed"||/Negotiation of connection|ICE failed|connection.*failed/i.test(msg))return "WebRTC接続の確立に失敗しました。同じWi-Fiでもルーターの端末間通信制限やブラウザの設定が影響します。通信診断を試してください。専用中継サーバーが必要な環境では現在の方式では接続できません。";return null}
+async function diagnose(){
+ const btn=$("diagnoseBtn");btn.disabled=true;status("通信診断中：この端末のWebRTC接続候補を確認しています…");
+ let pc=null;const kinds=new Set();
+ try{
+  if(!window.RTCPeerConnection)throw Error("このブラウザはWebRTCに対応していません");
+  pc=new RTCPeerConnection({iceServers:ICE_SERVERS});
+  pc.onicecandidate=e=>{if(e.candidate){const m=e.candidate.candidate.match(/ typ (host|srflx|relay|prflx)\b/);if(m)kinds.add(m[1])}};
+  pc.createDataChannel("link-arena-diagnostic");
+  await pc.setLocalDescription(await pc.createOffer());
+  await Promise.race([new Promise(resolve=>{if(pc.iceGatheringState==="complete")resolve();else pc.addEventListener("icegatheringstatechange",()=>{if(pc.iceGatheringState==="complete")resolve()})}),new Promise(resolve=>setTimeout(resolve,6500))]);
+  const summary="診断結果：WebRTC利用可、LAN候補 "+(kinds.has("host")?"あり":"未検出")+"、STUN外部候補 "+(kinds.has("srflx")?"あり":"未検出")+"。";
+  status(summary+" 接続できない場合はPC側でも診断を試し、端末間通信を許可したWi-Fiで再参加してください。");
+ }catch(e){status("診断失敗："+(e?.message||"WebRTCが利用できません"))}
+ finally{try{pc?.close()}catch(e){}btn.disabled=false}
+}
+
 function makeCard(){return {id:seq++,type:rand(NAMES.length),left:1+rand(7),right:1+rand(7),color:rand(COLORS.length)}}
 function match(tabs,sockets){return (tabs&sockets)===tabs}
 function visibleCards(g){if(!g.board.length)return [];if(g.board.length<=3)return g.board.slice();const i=g.board.findIndex(c=>c.id===g.lastId),start=Math.max(0,Math.min(g.board.length-3,g.lastSide==="left"?i:i-2));return g.board.slice(start,start+3)}
@@ -132,7 +143,7 @@ function join(){
  teardown();code=room;nick=name();host=false;status("部屋に接続しています…");
  $("joinBtn").disabled=true;
  const joiningPeer=new Peer(PEER_OPTIONS);peer=joiningPeer;
- let connected=false;
+ let connected=false,hasError=false;
  const timeout=setTimeout(()=>{
   if(peer!==joiningPeer||connected)return;
   $("joinBtn").disabled=false;
@@ -151,14 +162,14 @@ function join(){
    if(msg?.type==="reject")clearTimeout(timeout);
    onGuestData(msg);
   });
-  joiningConn.on("error",err=>{clearTimeout(timeout);$("joinBtn").disabled=false;connectionError(err)});
+  joiningConn.on("error",err=>{hasError=true;clearTimeout(timeout);$("joinBtn").disabled=false;connectionError(err)});
   joiningConn.on("close",()=>{
    clearTimeout(timeout);if(peer!==joiningPeer)return;
-   status("部屋との接続が切れました。再参加してください。");
+   if(!hasError)status("部屋との接続が切れました。再参加してください。");
    $("joinBtn").disabled=false;$("game").classList.add("hidden");$("lobby").classList.remove("hidden");
   });
  });
- joiningPeer.on("error",err=>{clearTimeout(timeout);$("joinBtn").disabled=false;connectionError(err)});
+ joiningPeer.on("error",err=>{hasError=true;clearTimeout(timeout);$("joinBtn").disabled=false;connectionError(err)});
 }
 
 function onIncoming(c){if(!host){c.close();return}c.on("data",msg=>{if(!msg||typeof msg!=="object")return;if(!c.roomSeat){if(msg.type!=="hello")return;if(game?.started||lobby.length>=4){c.send({type:"reject",reason:game?.started?"対戦が始まっています":"ルームが満員です"});setTimeout(()=>c.close(),200);return}const n=String(msg.name||"ゲスト").trim().slice(0,12)||"ゲスト";lobby.push({name:n,connected:true});c.roomSeat=lobby.length-1;peers.set(c.roomSeat,c);c.send({type:"assigned",seat:c.roomSeat,code});broadcastLobby();return}if(msg.type==="action"&&game?.started)handleAction(c.roomSeat,msg.action)});c.on("close",()=>{const i=c.roomSeat;if(!i)return;peers.delete(i);if(!game?.started){lobby.splice(i,1);const newMap=new Map();Array.from(peers.values()).forEach(x=>{if(x.roomSeat>i)x.roomSeat--;newMap.set(x.roomSeat,x)});peers=newMap;broadcastLobby()}else{game.players[i].connected=false;game.log=game.players[i].name+"が退出しました。";if(game.turn===i&&!game.pending)nextTurn(i);else if(game.pending?.actor===i){game.pending=null;nextTurn(i)}publish()}})}
@@ -210,7 +221,7 @@ function flyTo(el){window.LAAudio?.cue("draw");const deck=$("deck").querySelecto
 function showEffect(evt){if(!evt)return;if(evt.kind==="draw"){const target=evt.target===seat?$("hand").lastElementChild:$("opponents").children[Array.from({length:view?.players.length||0},(_,i)=>i).filter(i=>i!==seat).indexOf(evt.target)];if(target)for(let i=0;i<evt.count;i++)setTimeout(()=>flyTo(target),i*170)}if(evt.kind==="play"){window.LAAudio?.cue(evt.card===0?"place":"special");const target=$("board").lastElementChild?.querySelector(".tile");if(target){target.classList.add("land");setTimeout(()=>target.classList.remove("land"),450)}}}
 $("audioMute").onclick=()=>{const muted=window.LAAudio?.toggle();$("audioMute").textContent=muted?"🔇":"🔊"};
 $("audioVolume").addEventListener("input",()=>{const v=Number($("audioVolume").value)/100;window.LAAudio?.setVolume(v);if(v>0&&window.LAAudio?.muted){window.LAAudio.setMuted(false);$("audioMute").textContent="🔊"}});
-$("createBtn").onclick=create;$("joinBtn").onclick=join;$("leaveBtn").onclick=()=>{teardown();status("退出しました。")};$("exitGameBtn").onclick=()=>{if(confirm("対戦から退出しますか？")){teardown();status("退出しました。")}};$("startBtn").onclick=startGame;$("leftBtn").onclick=()=>{if(selectedId!==null)act({kind:"play",cardId:selectedId,side:"left"})};$("rightBtn").onclick=()=>{if(selectedId!==null)act({kind:"play",cardId:selectedId,side:"right"})};$("drawBtn").onclick=()=>act({kind:"draw"});
+$("diagnoseBtn").onclick=diagnose;$("createBtn").onclick=create;$("joinBtn").onclick=join;$("leaveBtn").onclick=()=>{teardown();status("退出しました。")};$("exitGameBtn").onclick=()=>{if(confirm("対戦から退出しますか？")){teardown();status("退出しました。")}};$("startBtn").onclick=startGame;$("leftBtn").onclick=()=>{if(selectedId!==null)act({kind:"play",cardId:selectedId,side:"left"})};$("rightBtn").onclick=()=>{if(selectedId!==null)act({kind:"play",cardId:selectedId,side:"right"})};$("drawBtn").onclick=()=>act({kind:"draw"});
 $("copyBtn").onclick=async()=>{const url=inviteUrl();try{await navigator.clipboard.writeText(url);status("招待リンクをコピーしました。PC・スマホどちらにも送れます。")}catch(e){const input=document.createElement("textarea");input.value=url;input.style.position="fixed";input.style.left="-9999px";document.body.appendChild(input);input.select();let ok=false;try{ok=document.execCommand("copy")}catch(_e){}input.remove();status(ok?"招待リンクをコピーしました。":"招待リンク："+url)}};
 $("shareBtn").onclick=async()=>{const url=inviteUrl();if(navigator.share){try{await navigator.share({title:"LINK ARENA フレンド対戦",text:"PC・スマホのどちらからでも参加できます！",url});return}catch(e){if(e?.name==="AbortError")return}}$("copyBtn").click()};
 window.addEventListener("beforeunload",()=>{if(peer)peer.destroy()});const initial=new URLSearchParams(location.search).get("room");if(initial){$("roomInput").value=sanitizeCode(initial);status("表示名を設定し、「ルームに参加」を押してください。")}
