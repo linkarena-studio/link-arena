@@ -1,0 +1,13 @@
+{
+  "FileVersion": 3,
+  "EngineAssociation": "5.6",
+  "Category": "Games",
+  "Description": "LINK ARENA 2D",
+  "Modules": [
+    {
+      "Name": "LinkArena",
+      "Type": "Runtime",
+      "LoadingPhase": "Default"
+    }
+  ]
+}
