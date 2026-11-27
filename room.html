@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#08291e">
-<title>LINK ARENA | プライベートルーム v0.6</title>
+<title>LINK ARENA | プライベートルーム v0.6.1</title>
 <style>
 *{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:system-ui,-apple-system,"Noto Sans JP",sans-serif;color:#f9efd4;background:#072a20}
 button,input{font:inherit}button{cursor:pointer;touch-action:manipulation;border:0;border-radius:10px;font-weight:800;padding:10px 14px;background:#f3d17b;color:#184433}button:disabled{opacity:.38;cursor:not-allowed}input{width:100%;border-radius:9px;background:#f9f4df;color:#153e30;border:0;padding:11px;font-size:16px}.hidden{display:none!important}a{color:#ffdb83}
@@ -66,7 +66,7 @@ main{max-width:1200px;margin:auto;padding:12px}h1{font-size:23px;color:#ffdd89;m
  </div>
  <div class="panel hidden" id="waiting"><h2 id="waitingTitle">参加待ち</h2><div id="codeView" class="room-code">------</div><p class="small" id="crossplayHelp">PCでもスマホでも同じURLを開き、表示名を入力すれば参加できます。</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button id="copyBtn" class="secondary" style="flex:1 1 140px">招待リンクをコピー</button><button id="shareBtn" class="secondary" style="flex:1 1 120px">招待リンクを共有</button><button id="leaveBtn" style="flex:1 1 80px">退出</button></div><div id="roster" class="roster"></div><button class="primary hidden" id="startBtn">このメンバーで対戦開始</button><p class="small">2〜4人でプレイできます。作成者はプレイ中もページを閉じないでください。</p></div>
  <div class="panel status" id="status" role="status">ルームを作るか、友達のコードを入力してください。</div>
- <p class="small">パソコン（Chrome・Edgeなど）とスマホ（Safari・Chromeなど）で対戦できます。両方の端末でこのページを開き、招待リンクまたは6桁コードで同じ部屋に参加してください。部屋の作成者は対戦中もブラウザを開いておいてください。</p><p class="small">通信には外部のPeerJS Cloud（無料の接続仲介サービス）を利用します。学校・企業のWi-Fiや一部のモバイル回線ではWebRTC接続が制限される場合があります。</p>
+ <p class="small">パソコン（Chrome・Edgeなど）とスマホ（Safari・Chromeなど）で対戦できます。両方の端末でこのページを開き、招待リンクまたは6桁コードで同じ部屋に参加してください。部屋の作成者は対戦中もブラウザを開いておいてください。</p><p class="small">通信には外部のPeerJS Cloud（無料の接続仲介サービス）を利用します。一部の4G・5G回線やWi-Fiでは端末間通信ができません。接続エラー時は両端末を同じWi-Fiにして再試行してください。無料の中継機能では接続できない回線もあります。</p>
 </section>
 <section id="game" class="hidden">
  <div id="gameHead"><strong>LINK ARENA · プライベート対戦</strong><span id="roomLabel"></span><div class="audio-controls"><button id="audioMute" title="音声切り替え" aria-label="音声をミュート">🔊</button><input id="audioVolume" aria-label="音量" type="range" min="0" max="100" value="35"></div><button id="exitGameBtn" class="secondary" style="padding:5px 9px">退出</button></div>
@@ -98,6 +98,19 @@ function name(){return $("nick").value.trim().slice(0,12)}
 function checkName(){if(name())return true;status("先に表示名を入力してください。");$("nick").focus();return false}
 function newCode(){const abc="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";const bytes=new Uint8Array(6);crypto.getRandomValues(bytes);return Array.from(bytes,b=>abc[b%abc.length]).join("")}
 function hostId(c){return "link-arena-room-"+c.toLowerCase()}
+// PeerJS Cloud is signaling only. Try UDP and TCP TURN relay paths as well as STUN.
+// The public PeerJS TURN service is best-effort; a managed TURN server is needed
+// for guaranteed service across restrictive mobile NATs / firewalls.
+const PEER_OPTIONS={config:{iceServers:[
+ {urls:["stun:stun.l.google.com:19302","stun:stun1.l.google.com:19302"]},
+ {urls:[
+  "turn:eu-0.turn.peerjs.com:3478?transport=udp",
+  "turn:us-0.turn.peerjs.com:3478?transport=udp",
+  "turn:eu-0.turn.peerjs.com:3478?transport=tcp",
+  "turn:us-0.turn.peerjs.com:3478?transport=tcp"
+ ],username:"peerjs",credential:"peerjsp"}
+ ],iceCandidatePoolSize:4,sdpSemantics:"unified-plan"}};
+function connectionHelp(err){const msg=String(err?.message||"");if(err?.type==="webrtc"||err?.type==="negotiation-failed"||/Negotiation of connection|ICE failed|connection.*failed/i.test(msg))return "端末同士の通信が確立できませんでした。作成者の画面を開いたまま、まずスマホをWi-Fiに切り替えて再参加してください。異なる回線で通信できない場合はTURN中継サーバーが必要です。";return null}
 function makeCard(){return {id:seq++,type:rand(NAMES.length),left:1+rand(7),right:1+rand(7),color:rand(COLORS.length)}}
 function match(tabs,sockets){return (tabs&sockets)===tabs}
 function visibleCards(g){if(!g.board.length)return [];if(g.board.length<=3)return g.board.slice();const i=g.board.findIndex(c=>c.id===g.lastId),start=Math.max(0,Math.min(g.board.length-3,g.lastSide==="left"?i:i-2));return g.board.slice(start,start+3)}
@@ -107,9 +120,9 @@ function sanitizeCode(v){return String(v||"").trim().toUpperCase().replace(/[^A-
 function showWaiting(){ $("waiting").classList.remove("hidden");$("lobbyGrid").classList.add("hidden");$("codeView").textContent=code;$("waitingTitle").textContent=host?"部屋を作成しました":"部屋に参加しました";renderLobby()}
 function renderLobby(){const members=host?lobby:window.remoteRoster||[];$("roster").replaceChildren();members.forEach((p,i)=>{const el=document.createElement("span");el.className="seat";el.textContent=(i===0?"👑 ":"")+(i+1)+". "+p.name;$("roster").appendChild(el)});$("startBtn").classList.toggle("hidden",!host);$("startBtn").disabled=members.length<2;$("startBtn").textContent=members.length+"人でゲーム開始"}
 function teardown(){if(peer){try{peer.destroy()}catch(e){}}peer=null;conn=null;peers.clear();host=false;game=null;view=null;lobby=[];selectedId=null;window.remoteRoster=null;$("lobby").classList.remove("hidden");$("game").classList.add("hidden");$("waiting").classList.add("hidden");$("lobbyGrid").classList.remove("hidden")}
-function connectionError(err){const type=err?.type;const hint=type==="peer-unavailable"?"部屋が見つかりません。コードを確認してください。":type==="network"||type==="webrtc"?"PCとスマホの両方でブラウザを開いたまま、別のネットワーク（Wi-Fi／モバイル回線）も試してください。":err?.message||"接続できませんでした。";status("通信エラー："+hint)}
+function connectionError(err){const type=err?.type;const hint=type==="peer-unavailable"?"部屋が見つかりません。コードを確認してください。":connectionHelp(err)|| (type==="network"?"接続サーバーに到達できません。少し時間を置いて再試行してください。":err?.message||"接続できませんでした。");status("通信エラー："+hint)}
 function inviteUrl(){return location.origin+location.pathname+"?room="+encodeURIComponent(code)}
-function create(){if(!checkName())return;window.LAAudio?.start();if(typeof Peer==="undefined"){status("通信ライブラリを読み込めません。接続を確認してください。");return}teardown();host=true;seat=0;nick=name();code=newCode();lobby=[{name:nick,connected:true}];status("ルームを作成しています…");$("createBtn").disabled=true;peer=new Peer(hostId(code));peer.on("open",()=>{$("createBtn").disabled=false;showWaiting();status("ルームを作成しました。コードを友達に送ってください。")});peer.on("connection",onIncoming);peer.on("error",err=>{$("createBtn").disabled=false;connectionError(err)});peer.on("disconnected",()=>status("接続サーバーとの通信が切れました。再接続を確認してください。"))}
+function create(){if(!checkName())return;window.LAAudio?.start();if(typeof Peer==="undefined"){status("通信ライブラリを読み込めません。接続を確認してください。");return}teardown();host=true;seat=0;nick=name();code=newCode();lobby=[{name:nick,connected:true}];status("ルームを作成しています…");$("createBtn").disabled=true;peer=new Peer(hostId(code),PEER_OPTIONS);peer.on("open",()=>{$("createBtn").disabled=false;showWaiting();status("ルームを作成しました。コードを友達に送ってください。")});peer.on("connection",onIncoming);peer.on("error",err=>{$("createBtn").disabled=false;connectionError(err)});peer.on("disconnected",()=>status("接続サーバーとの通信が切れました。再接続を確認してください。"))}
 function join(){
  if(!checkName())return;
  window.LAAudio?.start();
@@ -118,7 +131,7 @@ function join(){
  if(room.length!==6){status("6桁のルームコードを入力してください。");return}
  teardown();code=room;nick=name();host=false;status("部屋に接続しています…");
  $("joinBtn").disabled=true;
- const joiningPeer=new Peer();peer=joiningPeer;
+ const joiningPeer=new Peer(PEER_OPTIONS);peer=joiningPeer;
  let connected=false;
  const timeout=setTimeout(()=>{
   if(peer!==joiningPeer||connected)return;
