@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#08291e">
-<title>LINK ARENA | プライベートルーム v0.5.3</title>
+<title>LINK ARENA | プライベートルーム v0.6</title>
 <style>
 *{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:system-ui,-apple-system,"Noto Sans JP",sans-serif;color:#f9efd4;background:#072a20}
 button,input{font:inherit}button{cursor:pointer;touch-action:manipulation;border:0;border-radius:10px;font-weight:800;padding:10px 14px;background:#f3d17b;color:#184433}button:disabled{opacity:.38;cursor:not-allowed}input{width:100%;border-radius:9px;background:#f9f4df;color:#153e30;border:0;padding:11px;font-size:16px}.hidden{display:none!important}a{color:#ffdb83}
@@ -46,6 +46,7 @@ main{max-width:1200px;margin:auto;padding:12px}h1{font-size:23px;color:#ffdd89;m
 .fly{position:fixed;z-index:30;pointer-events:none;width:42px;height:58px;border:3px solid #ffdc8e;background:repeating-linear-gradient(135deg,#164d68 0 9px,#296b86 9px 18px);border-radius:7px;box-shadow:0 4px 8px #0008}
 @media(orientation:landscape) and (max-height:470px){main{padding:3px 7px}#game{height:calc(100dvh - 6px);min-height:0}.table{border-width:5px}#gameHead{min-height:0}.board-wrap{top:18%;height:37%}.bottom-zone{height:45%;min-height:114px}.board-slot{width:55px;min-width:55px}.board-slot:last-child{width:86px;min-width:86px}.board-slot .tile{width:86px;height:91px}.hand-row .tile{height:calc(var(--hand-size,90px) * .92);width:var(--hand-size,90px);flex-basis:var(--hand-size,90px)}.deck .deck-card{width:35px;height:48px;font-size:20px}.opponent{font-size:10px;padding:2px 6px}.hand-title{font-size:10px}.info{font-size:9px}.actions button{min-height:28px;padding:3px}.bottom-zone{padding:4px}}
 @media(orientation:portrait){#game{height:calc(100dvh - 45px);min-height:490px}.board-wrap{left:17%;right:2%}.deck{left:12%}.bottom-zone{height:35%;min-height:180px}.hand{justify-content:flex-start}.actions{flex-basis:112px}.actions button{font-size:10px}.tile .name{font-size:8px}}
+@media(max-width:640px){.lobby-grid{grid-template-columns:1fr}.panel{padding:14px}.lobby-grid .panel{margin:3px 0}.howto{margin:8px 0}.room-code{font-size:25px;letter-spacing:5px}.choose-box{width:98%}#gameHead strong{font-size:12px}}
 @media(prefers-reduced-motion:reduce){.tile.land{animation:none}}
 .audio-controls{display:flex;align-items:center;gap:6px;background:#063b2bbd;padding:3px 7px;border:1px solid #a8b88d66;border-radius:18px}
 .audio-controls button{padding:2px 5px;font-size:17px;background:transparent;color:#fff0c3}
@@ -57,15 +58,15 @@ main{max-width:1200px;margin:auto;padding:12px}h1{font-size:23px;color:#ffdd89;m
 </head><body><main>
 <section id="lobby">
  <h1>LINK ARENA <span class="small">プライベートルーム</span></h1>
- <p class="small">友達とリアルタイム対戦（2〜4人） · <a href="./">CPU対戦に戻る</a></p>
+ <p class="small">PC・スマホでクロスプレイ（2〜4人） · <a href="./">CPU対戦に戻る</a></p>
  <div class="panel field"><label for="nick">あなたの表示名</label><input id="nick" maxlength="12" placeholder="表示名を入力" autocomplete="nickname" required></div>
  <div class="lobby-grid" id="lobbyGrid">
   <div class="panel"><h2>部屋を作る</h2><p class="howto">作成者がルームを開き、友達にコードを伝えます。</p><button class="primary" id="createBtn">ルームを作成</button></div>
   <div class="panel"><h2>友達の部屋に参加</h2><div class="field"><label for="roomInput">6桁のルームコード</label><input id="roomInput" placeholder="例：AB12CD" maxlength="6" autocapitalize="characters"></div><button class="primary secondary" id="joinBtn">ルームに参加</button></div>
  </div>
- <div class="panel hidden" id="waiting"><h2 id="waitingTitle">参加待ち</h2><div id="codeView" class="room-code">------</div><div style="display:flex;gap:8px"><button id="copyBtn" class="secondary" style="flex:1">招待リンクをコピー</button><button id="leaveBtn" style="flex:1">退出</button></div><div id="roster" class="roster"></div><button class="primary hidden" id="startBtn">このメンバーで対戦開始</button><p class="small">2〜4人でプレイできます。作成者はプレイ中もページを閉じないでください。</p></div>
+ <div class="panel hidden" id="waiting"><h2 id="waitingTitle">参加待ち</h2><div id="codeView" class="room-code">------</div><p class="small" id="crossplayHelp">PCでもスマホでも同じURLを開き、表示名を入力すれば参加できます。</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button id="copyBtn" class="secondary" style="flex:1 1 140px">招待リンクをコピー</button><button id="shareBtn" class="secondary" style="flex:1 1 120px">招待リンクを共有</button><button id="leaveBtn" style="flex:1 1 80px">退出</button></div><div id="roster" class="roster"></div><button class="primary hidden" id="startBtn">このメンバーで対戦開始</button><p class="small">2〜4人でプレイできます。作成者はプレイ中もページを閉じないでください。</p></div>
  <div class="panel status" id="status" role="status">ルームを作るか、友達のコードを入力してください。</div>
- <p class="small">通信には外部のPeerJS Cloud（無料の接続仲介サービス）を利用します。ネットワーク環境によっては接続できない場合があります。</p>
+ <p class="small">パソコン（Chrome・Edgeなど）とスマホ（Safari・Chromeなど）で対戦できます。両方の端末でこのページを開き、招待リンクまたは6桁コードで同じ部屋に参加してください。部屋の作成者は対戦中もブラウザを開いておいてください。</p><p class="small">通信には外部のPeerJS Cloud（無料の接続仲介サービス）を利用します。学校・企業のWi-Fiや一部のモバイル回線ではWebRTC接続が制限される場合があります。</p>
 </section>
 <section id="game" class="hidden">
  <div id="gameHead"><strong>LINK ARENA · プライベート対戦</strong><span id="roomLabel"></span><div class="audio-controls"><button id="audioMute" title="音声切り替え" aria-label="音声をミュート">🔊</button><input id="audioVolume" aria-label="音量" type="range" min="0" max="100" value="35"></div><button id="exitGameBtn" class="secondary" style="padding:5px 9px">退出</button></div>
@@ -106,9 +107,47 @@ function sanitizeCode(v){return String(v||"").trim().toUpperCase().replace(/[^A-
 function showWaiting(){ $("waiting").classList.remove("hidden");$("lobbyGrid").classList.add("hidden");$("codeView").textContent=code;$("waitingTitle").textContent=host?"部屋を作成しました":"部屋に参加しました";renderLobby()}
 function renderLobby(){const members=host?lobby:window.remoteRoster||[];$("roster").replaceChildren();members.forEach((p,i)=>{const el=document.createElement("span");el.className="seat";el.textContent=(i===0?"👑 ":"")+(i+1)+". "+p.name;$("roster").appendChild(el)});$("startBtn").classList.toggle("hidden",!host);$("startBtn").disabled=members.length<2;$("startBtn").textContent=members.length+"人でゲーム開始"}
 function teardown(){if(peer){try{peer.destroy()}catch(e){}}peer=null;conn=null;peers.clear();host=false;game=null;view=null;lobby=[];selectedId=null;window.remoteRoster=null;$("lobby").classList.remove("hidden");$("game").classList.add("hidden");$("waiting").classList.add("hidden");$("lobbyGrid").classList.remove("hidden")}
-function connectionError(err){status("通信エラー："+(err?.type==="peer-unavailable"?"部屋が見つかりません。コードを確認してください。":err?.message||"接続できませんでした。"))}
+function connectionError(err){const type=err?.type;const hint=type==="peer-unavailable"?"部屋が見つかりません。コードを確認してください。":type==="network"||type==="webrtc"?"PCとスマホの両方でブラウザを開いたまま、別のネットワーク（Wi-Fi／モバイル回線）も試してください。":err?.message||"接続できませんでした。";status("通信エラー："+hint)}
+function inviteUrl(){return location.origin+location.pathname+"?room="+encodeURIComponent(code)}
 function create(){if(!checkName())return;window.LAAudio?.start();if(typeof Peer==="undefined"){status("通信ライブラリを読み込めません。接続を確認してください。");return}teardown();host=true;seat=0;nick=name();code=newCode();lobby=[{name:nick,connected:true}];status("ルームを作成しています…");$("createBtn").disabled=true;peer=new Peer(hostId(code));peer.on("open",()=>{$("createBtn").disabled=false;showWaiting();status("ルームを作成しました。コードを友達に送ってください。")});peer.on("connection",onIncoming);peer.on("error",err=>{$("createBtn").disabled=false;connectionError(err)});peer.on("disconnected",()=>status("接続サーバーとの通信が切れました。再接続を確認してください。"))}
-function join(){if(!checkName())return;window.LAAudio?.start();if(typeof Peer==="undefined"){status("通信ライブラリを読み込めません。");return}const room=sanitizeCode($("roomInput").value);if(room.length!==6){status("6桁のルームコードを入力してください。");return}teardown();code=room;nick=name();host=false;status("部屋に接続しています…");$("joinBtn").disabled=true;peer=new Peer();peer.on("open",()=>{conn=peer.connect(hostId(code),{reliable:true});conn.on("open",()=>{conn.send({type:"hello",name:nick});status("参加確認中…")});conn.on("data",onGuestData);conn.on("error",connectionError);conn.on("close",()=>{status("部屋との接続が切れました。再参加してください。");$("joinBtn").disabled=false;$("game").classList.add("hidden");$("lobby").classList.remove("hidden")})});peer.on("error",err=>{$("joinBtn").disabled=false;connectionError(err)})}
+function join(){
+ if(!checkName())return;
+ window.LAAudio?.start();
+ if(typeof Peer==="undefined"){status("通信ライブラリを読み込めません。");return}
+ const room=sanitizeCode($("roomInput").value);
+ if(room.length!==6){status("6桁のルームコードを入力してください。");return}
+ teardown();code=room;nick=name();host=false;status("部屋に接続しています…");
+ $("joinBtn").disabled=true;
+ const joiningPeer=new Peer();peer=joiningPeer;
+ let connected=false;
+ const timeout=setTimeout(()=>{
+  if(peer!==joiningPeer||connected)return;
+  $("joinBtn").disabled=false;
+  status("接続が完了していません。作成者が部屋を開いているか確認し、Wi-Fiとモバイル回線を切り替えて再試行してください。");
+  teardown();
+ },25000);
+ joiningPeer.on("open",()=>{
+  if(peer!==joiningPeer)return;
+  const joiningConn=joiningPeer.connect(hostId(code),{reliable:true});conn=joiningConn;
+  joiningConn.on("open",()=>{
+   if(peer!==joiningPeer)return;
+   joiningConn.send({type:"hello",name:nick});status("参加確認中…");
+  });
+  joiningConn.on("data",msg=>{
+   if(msg?.type==="assigned"||msg?.type==="state"){connected=true;clearTimeout(timeout)}
+   if(msg?.type==="reject")clearTimeout(timeout);
+   onGuestData(msg);
+  });
+  joiningConn.on("error",err=>{clearTimeout(timeout);$("joinBtn").disabled=false;connectionError(err)});
+  joiningConn.on("close",()=>{
+   clearTimeout(timeout);if(peer!==joiningPeer)return;
+   status("部屋との接続が切れました。再参加してください。");
+   $("joinBtn").disabled=false;$("game").classList.add("hidden");$("lobby").classList.remove("hidden");
+  });
+ });
+ joiningPeer.on("error",err=>{clearTimeout(timeout);$("joinBtn").disabled=false;connectionError(err)});
+}
+
 function onIncoming(c){if(!host){c.close();return}c.on("data",msg=>{if(!msg||typeof msg!=="object")return;if(!c.roomSeat){if(msg.type!=="hello")return;if(game?.started||lobby.length>=4){c.send({type:"reject",reason:game?.started?"対戦が始まっています":"ルームが満員です"});setTimeout(()=>c.close(),200);return}const n=String(msg.name||"ゲスト").trim().slice(0,12)||"ゲスト";lobby.push({name:n,connected:true});c.roomSeat=lobby.length-1;peers.set(c.roomSeat,c);c.send({type:"assigned",seat:c.roomSeat,code});broadcastLobby();return}if(msg.type==="action"&&game?.started)handleAction(c.roomSeat,msg.action)});c.on("close",()=>{const i=c.roomSeat;if(!i)return;peers.delete(i);if(!game?.started){lobby.splice(i,1);const newMap=new Map();Array.from(peers.values()).forEach(x=>{if(x.roomSeat>i)x.roomSeat--;newMap.set(x.roomSeat,x)});peers=newMap;broadcastLobby()}else{game.players[i].connected=false;game.log=game.players[i].name+"が退出しました。";if(game.turn===i&&!game.pending)nextTurn(i);else if(game.pending?.actor===i){game.pending=null;nextTurn(i)}publish()}})}
 function broadcastLobby(){renderLobby();for(const [i,c] of peers){if(c.open)c.send({type:"lobby",roster:lobby,seat:i})}}
 function onGuestData(msg){if(!msg||typeof msg!=="object")return;if(msg.type==="reject"){status(msg.reason||"参加できませんでした");$("joinBtn").disabled=false;return}if(msg.type==="assigned"){seat=msg.seat;code=msg.code;showWaiting();status("友達の参加を待っています…");$("joinBtn").disabled=false}if(msg.type==="lobby"){if(Number.isInteger(msg.seat))seat=msg.seat;window.remoteRoster=msg.roster;renderLobby()}if(msg.type==="state"){const wasStarted=view?.started;view=msg.view;seat=msg.seat;displayGame(!wasStarted&&view.started)}if(msg.type==="effect")showEffect(msg.event)}
@@ -159,7 +198,8 @@ function showEffect(evt){if(!evt)return;if(evt.kind==="draw"){const target=evt.t
 $("audioMute").onclick=()=>{const muted=window.LAAudio?.toggle();$("audioMute").textContent=muted?"🔇":"🔊"};
 $("audioVolume").addEventListener("input",()=>{const v=Number($("audioVolume").value)/100;window.LAAudio?.setVolume(v);if(v>0&&window.LAAudio?.muted){window.LAAudio.setMuted(false);$("audioMute").textContent="🔊"}});
 $("createBtn").onclick=create;$("joinBtn").onclick=join;$("leaveBtn").onclick=()=>{teardown();status("退出しました。")};$("exitGameBtn").onclick=()=>{if(confirm("対戦から退出しますか？")){teardown();status("退出しました。")}};$("startBtn").onclick=startGame;$("leftBtn").onclick=()=>{if(selectedId!==null)act({kind:"play",cardId:selectedId,side:"left"})};$("rightBtn").onclick=()=>{if(selectedId!==null)act({kind:"play",cardId:selectedId,side:"right"})};$("drawBtn").onclick=()=>act({kind:"draw"});
-$("copyBtn").onclick=async()=>{const url=location.origin+location.pathname+"?room="+code;try{await navigator.clipboard.writeText(url);status("招待リンクをコピーしました。")}catch(e){status("招待リンク："+url)}};
+$("copyBtn").onclick=async()=>{const url=inviteUrl();try{await navigator.clipboard.writeText(url);status("招待リンクをコピーしました。PC・スマホどちらにも送れます。")}catch(e){const input=document.createElement("textarea");input.value=url;input.style.position="fixed";input.style.left="-9999px";document.body.appendChild(input);input.select();let ok=false;try{ok=document.execCommand("copy")}catch(_e){}input.remove();status(ok?"招待リンクをコピーしました。":"招待リンク："+url)}};
+$("shareBtn").onclick=async()=>{const url=inviteUrl();if(navigator.share){try{await navigator.share({title:"LINK ARENA フレンド対戦",text:"PC・スマホのどちらからでも参加できます！",url});return}catch(e){if(e?.name==="AbortError")return}}$("copyBtn").click()};
 window.addEventListener("beforeunload",()=>{if(peer)peer.destroy()});const initial=new URLSearchParams(location.search).get("room");if(initial){$("roomInput").value=sanitizeCode(initial);status("表示名を設定し、「ルームに参加」を押してください。")}
 })();
 </script></body></html>
